@@ -1,0 +1,36 @@
+name: Export SORA wallet
+run-name: Export ${{ inputs.address }} (${{ inputs.job_id }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      address:
+        description: SORA address to export
+        required: true
+      job_id:
+        description: Opaque id the web frontend uses to find this run
+        required: true
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    defaults:
+      run:
+        working-directory: exporter
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - run: npm ci
+
+      - run: node sora-chain-export.js "${{ inputs.address }}" out.csv
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.job_id }}
+          path: exporter/out.csv
+          retention-days: 1

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SORA → Coinpanda export</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 16px/1.5 -apple-system, system-ui, sans-serif; max-width: 640px; margin: 3rem auto; padding: 0 1rem; }
+  h1 { font-size: 1.3rem; }
+  input { width: 100%; box-sizing: border-box; padding: 0.6rem; font-size: 1rem; }
+  button { padding: 0.6rem 1.2rem; font-size: 1rem; margin-top: 0.75rem; cursor: pointer; }
+  button:disabled { cursor: default; opacity: 0.6; }
+  #status { margin-top: 1rem; white-space: pre-wrap; }
+  a.run-link { font-size: 0.85rem; }
+</style>
+</head>
+<body>
+<h1>SORA → Coinpanda export</h1>
+<p>Enter a SORA address. This scans the full chain history for it, which takes a
+few minutes for small wallets and up to an hour for very active ones.</p>
+<input id="address" placeholder="cn..." autocomplete="off" spellcheck="false">
+<button id="go">Export</button>
+<div id="status"></div>
+
+<script>
+const addressEl = document.getElementById('address');
+const statusEl = document.getElementById('status');
+const goBtn = document.getElementById('go');
+
+async function poll(jobId) {
+  const res = await fetch(`/api/status?jobId=${jobId}`);
+  const data = await res.json();
+  if (data.state === 'pending') {
+    statusEl.textContent = 'Waiting for the job to start...';
+  } else if (data.state === 'running') {
+    statusEl.innerHTML = `Scanning the chain, this can take a while... <a class="run-link" href="${data.runUrl}" target="_blank">view live log</a>`;
+  } else if (data.state === 'done') {
+    statusEl.innerHTML = `Done. <a href="/api/download?jobId=${jobId}">Download CSV</a>`;
+    goBtn.disabled = false;
+    return;
+  } else if (data.state === 'failed') {
+    statusEl.innerHTML = `Export failed (${data.conclusion || 'unknown'}). <a class="run-link" href="${data.runUrl}" target="_blank">view log</a>`;
+    goBtn.disabled = false;
+    return;
+  } else {
+    statusEl.textContent = data.error || 'unknown error';
+    goBtn.disabled = false;
+    return;
+  }
+  setTimeout(() => poll(jobId), 10000);
+}
+
+goBtn.addEventListener('click', async () => {
+  const address = addressEl.value.trim();
+  if (!address) return;
+  goBtn.disabled = true;
+  statusEl.textContent = 'Starting export...';
+  const res = await fetch('/api/start', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address }),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    statusEl.textContent = data.error || 'could not start export';
+    goBtn.disabled = false;
+    return;
+  }
+  poll(data.jobId);
+});
+</script>
+</body>
+</html>

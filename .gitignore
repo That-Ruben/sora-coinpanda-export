@@ -1,0 +1,5 @@
+node_modules/
+exporter/node_modules/
+exporter/out.csv
+exporter/*.blocks.json
+.vercel/

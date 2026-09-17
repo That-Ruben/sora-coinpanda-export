@@ -1,0 +1,9 @@
+{
+  "name": "sora-export-webapp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web frontend that triggers the SORA exporter as a GitHub Actions job and hands back the CSV",
+  "dependencies": {
+    "adm-zip": "0.5.16"
+  }
+}
