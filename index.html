@@ -113,6 +113,29 @@ async function poll(jobId) {
   setTimeout(() => poll(jobId), 10000);
 }
 
+async function checkOne(job) {
+  try {
+    const res = await fetch(`/api/status?jobId=${job.jobId}`);
+    const data = await res.json();
+    if (data.state === 'done' || data.state === 'failed' || data.state === 'running') {
+      updateJobState(job.jobId, { state: data.state, runUrl: data.runUrl, conclusion: data.conclusion });
+    }
+  } catch { /* leave as-is, retried next cycle */ }
+}
+
+// Jobs in the history list aren't otherwise checked unless you're actively
+// polling them (e.g. via the URL's ?job=), so they'd show a stale "running"
+// forever. Refresh every non-finished one in the background instead.
+async function refreshHistory() {
+  const pending = loadJobs().filter((j) => j.state !== 'done' && j.state !== 'failed');
+  if (!pending.length) return;
+  await Promise.all(pending.map(checkOne));
+  renderHistory();
+  if (loadJobs().some((j) => j.state !== 'done' && j.state !== 'failed')) {
+    setTimeout(refreshHistory, 10000);
+  }
+}
+
 function startPolling(jobId, address) {
   const url = new URL(location.href);
   url.searchParams.set('job', jobId);
@@ -142,6 +165,7 @@ goBtn.addEventListener('click', async () => {
 });
 
 renderHistory();
+refreshHistory();
 const resumeJobId = new URL(location.href).searchParams.get('job');
 if (resumeJobId) {
   goBtn.disabled = true;
