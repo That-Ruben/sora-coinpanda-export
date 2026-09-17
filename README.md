@@ -38,7 +38,8 @@ that job and hands back the result.
 
 - `exporter/meta_cache/` is committed so the workflow doesn't need to
   re-download SORA runtime metadata on every run.
-- GitHub Actions artifacts on the free tier expire (`retention-days: 1` in
-  the workflow) — download promptly once a job finishes.
+- Artifacts expire after 7 days (`retention-days: 7` in the workflow) — the
+  frontend's "Recent exports" list will still show a job as done past that
+  point, but the download will 404.
 - A run can take up to the job's `timeout-minutes` (currently 350) before
   GitHub kills it; very large wallets may need this raised.

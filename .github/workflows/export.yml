@@ -33,4 +33,4 @@ jobs:
         with:
           name: ${{ inputs.job_id }}
           path: exporter/out.csv
-          retention-days: 1
+          retention-days: 7
