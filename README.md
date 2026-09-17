@@ -21,18 +21,6 @@ that job and hands back the result.
   from GitHub server-side, unzips it, and streams the plain CSV back.
 - `index.html` — the form + polling UI.
 
-## One-time setup
-
-1. Push this repo to GitHub (public is fine — the chain data behind these
-   CSVs is already public; nothing here needs to be private).
-2. Create a GitHub Personal Access Token (fine-grained, scoped to this repo)
-   with **Actions: read and write** permission.
-3. Deploy this repo to Vercel, and set these environment variables in the
-   Vercel project settings:
-   - `GITHUB_TOKEN` — the token from step 2
-   - `GITHUB_OWNER` — your GitHub username/org
-   - `GITHUB_REPO` — this repo's name
-   - `GITHUB_REF` — branch to run the workflow from (defaults to `main` if unset)
 
 ## Notes
 
