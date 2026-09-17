@@ -16,8 +16,9 @@
   #history { margin-top: 2rem; }
   #history h2 { font-size: 1rem; }
   #history ul { list-style: none; padding: 0; }
-  #history li { padding: 0.4rem 0; border-bottom: 1px solid rgba(128,128,128,0.3); display: flex; justify-content: space-between; gap: 1rem; }
+  #history li { padding: 0.4rem 0; border-bottom: 1px solid rgba(128,128,128,0.3); display: flex; flex-direction: column; align-items: flex-start; gap: 0.15rem; }
   #history .addr { font-family: monospace; font-size: 0.85rem; }
+  #history .time { font-size: 0.75rem; opacity: 0.65; margin-left: 0.5rem; }
   #history .state { font-size: 0.85rem; }
 </style>
 </head>
@@ -61,12 +62,27 @@ function updateJobState(jobId, patch) {
   if (job) { Object.assign(job, patch); saveJob(job); }
 }
 
+function timeAgo(ts) {
+  if (!ts) return '';
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'just now';
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m} minute${m === 1 ? '' : 's'} ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h} hour${h === 1 ? '' : 's'} ago`;
+  const d = Math.floor(h / 24);
+  return `${d} day${d === 1 ? '' : 's'} ago`;
+}
+
 function renderHistory() {
   const jobs = loadJobs();
   if (!jobs.length) { historyEl.innerHTML = ''; return; }
   historyEl.innerHTML = '<h2>Recent exports (this browser)</h2><ul>' +
     jobs.map((j) => `<li>
-      <span class="addr">${j.address || j.jobId.slice(0, 8)}</span>
+      <span>
+        <span class="addr">${j.address || j.jobId.slice(0, 8)}</span>
+        <span class="time">${timeAgo(j.startedAt)}</span>
+      </span>
       <span class="state">${describeState(j)}</span>
     </li>`).join('') + '</ul>';
 }
@@ -166,6 +182,7 @@ goBtn.addEventListener('click', async () => {
 
 renderHistory();
 refreshHistory();
+setInterval(renderHistory, 30000); // keeps "X minutes ago" fresh even between status changes
 const resumeJobId = new URL(location.href).searchParams.get('job');
 if (resumeJobId) {
   goBtn.disabled = true;
