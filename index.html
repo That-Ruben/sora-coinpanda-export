@@ -8,7 +8,7 @@
   :root { color-scheme: light dark; }
   body { font: 16px/1.5 -apple-system, system-ui, sans-serif; max-width: 640px; margin: 3rem auto; padding: 0 1rem; }
   h1 { font-size: 1.3rem; }
-  input { width: 100%; box-sizing: border-box; padding: 0.6rem; font-size: 1rem; }
+  textarea { width: 100%; box-sizing: border-box; padding: 0.6rem; font-size: 1rem; font-family: monospace; resize: vertical; }
   button { padding: 0.6rem 1.2rem; font-size: 1rem; margin-top: 0.75rem; cursor: pointer; }
   button:disabled { cursor: default; opacity: 0.6; }
   #status { margin-top: 1rem; white-space: pre-wrap; }
@@ -25,20 +25,22 @@
 </head>
 <body>
 <h1>SORA → Coinpanda export</h1>
-<input id="address" placeholder="cn..." autocomplete="off" spellcheck="false">
+<textarea id="addresses" rows="4" placeholder="cn...&#10;cn...&#10;one address per line" autocomplete="off" spellcheck="false"></textarea>
 <button id="go">Export</button>
 <div id="status"></div>
 
 <div id="history"></div>
 
 <script>
-const addressEl = document.getElementById('address');
+const addressesEl = document.getElementById('addresses');
 const statusEl = document.getElementById('status');
 const goBtn = document.getElementById('go');
 const historyEl = document.getElementById('history');
 
 const STORAGE_KEY = 'soraExportJobs';
-const MAX_HISTORY = 20;
+const MAX_HISTORY = 50;
+// Matches the exporter's own validation (api/start.js): SS58 prefix 69.
+const ADDRESS_RE = /^cn[1-9A-HJ-NP-Za-km-z]{45,49}$/;
 
 function loadJobs() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
@@ -155,32 +157,51 @@ async function refreshHistory() {
   }
 }
 
-function startPolling(jobId, address) {
-  const url = new URL(location.href);
-  url.searchParams.set('job', jobId);
-  history.replaceState(null, '', url);
-  saveJob({ jobId, address, state: 'running', startedAt: Date.now() });
-  renderHistory();
-  poll(jobId);
-}
-
-goBtn.addEventListener('click', async () => {
-  const address = addressEl.value.trim();
-  if (!address) return;
-  goBtn.disabled = true;
-  statusEl.textContent = 'Starting export...';
+async function startOne(address) {
   const res = await fetch('/api/start', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ address }),
   });
   const data = await res.json();
-  if (!res.ok) {
-    statusEl.textContent = data.error || 'could not start export';
-    goBtn.disabled = false;
+  if (!res.ok) throw new Error(data.error || 'could not start export');
+  return data.jobId;
+}
+
+goBtn.addEventListener('click', async () => {
+  const lines = addressesEl.value.split('\n').map((s) => s.trim()).filter(Boolean);
+  const addresses = [...new Set(lines)];
+  if (!addresses.length) return;
+  const invalid = addresses.filter((a) => !ADDRESS_RE.test(a));
+  const valid = addresses.filter((a) => ADDRESS_RE.test(a));
+  if (!valid.length) {
+    statusEl.textContent = `No valid SORA addresses found (${invalid.length} invalid).`;
     return;
   }
-  startPolling(data.jobId, address);
+
+  goBtn.disabled = true;
+  const failed = [];
+  for (let i = 0; i < valid.length; i++) {
+    const address = valid[i];
+    statusEl.textContent = `Starting export ${i + 1}/${valid.length}...`;
+    try {
+      const jobId = await startOne(address);
+      saveJob({ jobId, address, state: 'running', startedAt: Date.now() });
+      renderHistory();
+    } catch (e) {
+      failed.push(`${address}: ${e.message}`);
+    }
+  }
+
+  const parts = [];
+  if (valid.length - failed.length > 0) parts.push(`started ${valid.length - failed.length} export(s)`);
+  if (invalid.length) parts.push(`${invalid.length} invalid address(es) skipped`);
+  if (failed.length) parts.push(`${failed.length} failed to start: ${failed.join('; ')}`);
+  statusEl.textContent = parts.join(', ') + '. See history below.';
+
+  addressesEl.value = '';
+  goBtn.disabled = false;
+  refreshHistory();
 });
 
 renderHistory();
