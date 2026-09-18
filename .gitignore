@@ -3,3 +3,6 @@ exporter/node_modules/
 exporter/out.csv
 exporter/*.blocks.json
 .vercel/
+
+.vercel
+.env*

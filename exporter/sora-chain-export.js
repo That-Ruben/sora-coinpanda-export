@@ -196,6 +196,45 @@ function parseDecimal(str) {
   return neg ? -v : v;
 }
 
+// Coinpanda/tax accounting only cares about net movement per day per currency,
+// not each individual on-chain event, so same-day Send/Receive/Trade rows that
+// share the same currency (both sides, for a Trade), label, and description
+// (minus the per-counterparty "to/from X" suffix) collapse into one summed
+// row. Redenomination "Swap" rows are excluded even though they're Type
+// Trade: each is a distinct governance rescaling (old balance -> new balance),
+// not a market trade, so summing them would be meaningless. rows must already
+// be in chronological order; the merged row keeps the earliest occurrence's
+// timestamp/position so file order stays chronological.
+function aggregateRows(rows) {
+  const stripCounterparty = (d) => (d || '').replace(/ (?:to|from) \S+…\S+$/, '');
+  const mergeable = (r) => r.Type === 'Send' || r.Type === 'Receive' || (r.Type === 'Trade' && r.Label !== 'Swap');
+  const groups = new Map();
+  const out = [];
+  for (const r of rows) {
+    if (!mergeable(r)) { out.push(r); continue; }
+    const day = r['Timestamp (UTC)'].slice(0, 10);
+    const currency = r.Type === 'Trade' ? `${r['Sent Currency']}->${r['Received Currency']}` : (r['Sent Currency'] || r['Received Currency']);
+    const key = [day, r.Type, currency, stripCounterparty(r.Description), r.Label || ''].join('|');
+    const g = groups.get(key);
+    if (!g) {
+      const clone = { ...r, _mergedCount: 1 };
+      groups.set(key, clone);
+      out.push(clone);
+      continue;
+    }
+    g._mergedCount++;
+    for (const col of ['Sent Amount', 'Received Amount', 'Fee Amount']) {
+      if (!r[col]) continue;
+      g[col] = formatAmount(parseDecimal(g[col]) + parseDecimal(r[col]), 18);
+    }
+  }
+  for (const g of out) {
+    if (g._mergedCount > 1) g.Description = `${g.Description} (${g._mergedCount} on-chain events merged)`;
+    delete g._mergedCount;
+  }
+  return out;
+}
+
 function csvCell(v) {
   if (v === null || v === undefined) return '';
   const s = String(v);
@@ -316,7 +355,7 @@ async function main() {
   }
 
   const totals = new Map();
-  const rows = [];
+  let rows = [];
   const problems = [];
 
   // 2 + 3. Decode and verify.
@@ -648,6 +687,16 @@ async function main() {
     return;
   }
   rows.sort((a, b) => a._block - b._block || a._idx - b._idx);
+
+  // The full unaggregated detail is kept alongside the merged file for anyone
+  // who needs the individual on-chain events (audits, disputes, etc).
+  const unaggregatedFile = outFile.replace(/\.csv$/, '') + '_unaggregated.csv';
+  writeCsv(unaggregatedFile, rows);
+  log(`wrote ${rows.length} unaggregated rows -> ${unaggregatedFile}`);
+
+  const mergedCount = rows.length;
+  rows = aggregateRows(rows);
+  log(`merged same-day Send/Receive/Trade rows: ${mergedCount} -> ${rows.length} rows`);
 
   // Sanity check: Coinpanda replays rows in this exact order, so no currency's
   // running balance may go negative mid-file even though totals reconcile.
