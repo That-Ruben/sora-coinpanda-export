@@ -25,10 +25,6 @@
 </head>
 <body>
 <h1>SORA → Coinpanda export</h1>
-<p>Enter a SORA address. This scans the full chain history for it, which takes a
-few minutes for small wallets and up to an hour for very active ones. You can
-close this tab — the job keeps running on GitHub, and reopening this page (or
-the link it gives you) picks it back up.</p>
 <input id="address" placeholder="cn..." autocomplete="off" spellcheck="false">
 <button id="go">Export</button>
 <div id="status"></div>
@@ -113,11 +109,10 @@ async function poll(jobId) {
   if (data.state === 'pending') {
     statusEl.textContent = 'Waiting for the job to start...';
   } else if (data.state === 'running') {
-    statusEl.innerHTML = `Scanning the chain for <span class="addr">${data.address || jobId}</span>, this can take a while — safe to close this tab, this page (or its link) will pick it back up. <a class="run-link" href="${data.runUrl}" target="_blank">view live log</a>`;
+    statusEl.innerHTML = `Scanning the chain for <span class="addr">${data.address || jobId}</span>, this can take a while. You can close this tab and come back later. <a class="run-link" href="${data.runUrl}" target="_blank">view live log</a>`;
     updateJobState(jobId, { state: 'running', runUrl: data.runUrl, address: data.address });
   } else if (data.state === 'done') {
-    statusEl.innerHTML = `Export for <span class="addr">${data.address || jobId}</span> is complete. ` +
-      `The main CSV has same-day rows merged for a cleaner Coinpanda import; the unaggregated version has every individual on-chain event.<br>` +
+    statusEl.innerHTML = `Export for <span class="addr">${data.address || jobId}</span> is complete.<br>` +
       downloadLinks(jobId);
     updateJobState(jobId, { state: 'done', address: data.address });
     goBtn.disabled = false;
