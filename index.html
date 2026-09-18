@@ -13,6 +13,7 @@
   button:disabled { cursor: default; opacity: 0.6; }
   #status { margin-top: 1rem; white-space: pre-wrap; }
   a.run-link { font-size: 0.85rem; }
+  .addr { font-family: monospace; }
   #history { margin-top: 2rem; }
   #history h2 { font-size: 1rem; }
   #history ul { list-style: none; padding: 0; }
@@ -87,8 +88,13 @@ function renderHistory() {
     </li>`).join('') + '</ul>';
 }
 
+function downloadLinks(jobId) {
+  return `<a href="/api/download?jobId=${jobId}">Download CSV</a> ` +
+    `(<a href="/api/download?jobId=${jobId}&variant=unaggregated">unaggregated version</a>)`;
+}
+
 function describeState(j) {
-  if (j.state === 'done') return `<a href="/api/download?jobId=${j.jobId}">Download CSV</a>`;
+  if (j.state === 'done') return downloadLinks(j.jobId);
   if (j.state === 'failed') return `failed — <a class="run-link" href="${j.runUrl || '#'}" target="_blank">log</a>`;
   return `<a href="?job=${j.jobId}">still running / check</a>`;
 }
@@ -107,17 +113,19 @@ async function poll(jobId) {
   if (data.state === 'pending') {
     statusEl.textContent = 'Waiting for the job to start...';
   } else if (data.state === 'running') {
-    statusEl.innerHTML = `Scanning the chain, this can take a while — safe to close this tab, this page (or its link) will pick it back up. <a class="run-link" href="${data.runUrl}" target="_blank">view live log</a>`;
-    updateJobState(jobId, { state: 'running', runUrl: data.runUrl });
+    statusEl.innerHTML = `Scanning the chain for <span class="addr">${data.address || jobId}</span>, this can take a while — safe to close this tab, this page (or its link) will pick it back up. <a class="run-link" href="${data.runUrl}" target="_blank">view live log</a>`;
+    updateJobState(jobId, { state: 'running', runUrl: data.runUrl, address: data.address });
   } else if (data.state === 'done') {
-    statusEl.innerHTML = `Done. <a href="/api/download?jobId=${jobId}">Download CSV</a>`;
-    updateJobState(jobId, { state: 'done' });
+    statusEl.innerHTML = `Export for <span class="addr">${data.address || jobId}</span> is complete. ` +
+      `The main CSV has same-day rows merged for a cleaner Coinpanda import; the unaggregated version has every individual on-chain event.<br>` +
+      downloadLinks(jobId);
+    updateJobState(jobId, { state: 'done', address: data.address });
     goBtn.disabled = false;
     renderHistory();
     return;
   } else if (data.state === 'failed') {
-    statusEl.innerHTML = `Export failed (${data.conclusion || 'unknown'}). <a class="run-link" href="${data.runUrl}" target="_blank">view log</a>`;
-    updateJobState(jobId, { state: 'failed', runUrl: data.runUrl });
+    statusEl.innerHTML = `Export for <span class="addr">${data.address || jobId}</span> failed (${data.conclusion || 'unknown'}). <a class="run-link" href="${data.runUrl}" target="_blank">view log</a>`;
+    updateJobState(jobId, { state: 'failed', runUrl: data.runUrl, address: data.address });
     goBtn.disabled = false;
     renderHistory();
     return;
@@ -134,7 +142,7 @@ async function checkOne(job) {
     const res = await fetch(`/api/status?jobId=${job.jobId}`);
     const data = await res.json();
     if (data.state === 'done' || data.state === 'failed' || data.state === 'running') {
-      updateJobState(job.jobId, { state: data.state, runUrl: data.runUrl, conclusion: data.conclusion });
+      updateJobState(job.jobId, { state: data.state, runUrl: data.runUrl, conclusion: data.conclusion, address: data.address || job.address });
     }
   } catch { /* leave as-is, retried next cycle */ }
 }

@@ -32,5 +32,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ inputs.job_id }}
-          path: exporter/out.csv
+          path: |
+            exporter/out.csv
+            exporter/out_unaggregated.csv
           retention-days: 7

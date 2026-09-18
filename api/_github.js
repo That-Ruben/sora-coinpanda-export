@@ -46,4 +46,12 @@ async function findArtifact(runId, jobId) {
   return artifacts.find((a) => a.name === jobId) || null;
 }
 
-module.exports = { gh, repo, dispatchExport, findRun, findArtifact };
+// Pulls the address back out of the run's display name (see run-name in
+// export.yml: "Export <address> (<job_id>)") since the dispatch call itself
+// doesn't hand back anything tying a run to the address that started it.
+function addressFromRun(run) {
+  const m = /^Export (\S+) \(/.exec(run.name || '');
+  return m ? m[1] : null;
+}
+
+module.exports = { gh, repo, dispatchExport, findRun, findArtifact, addressFromRun };

@@ -1,9 +1,11 @@
 const AdmZip = require('adm-zip');
-const { gh, findRun, findArtifact } = require('./_github');
+const { gh, findRun, findArtifact, addressFromRun } = require('./_github');
 
 module.exports = async (req, res) => {
   const jobId = req.query.jobId;
   if (!jobId) return res.status(400).json({ error: 'jobId required' });
+  const variant = req.query.variant === 'unaggregated' ? 'unaggregated' : 'aggregated';
+  const entryName = variant === 'unaggregated' ? 'out_unaggregated.csv' : 'out.csv';
 
   try {
     const run = await findRun(jobId);
@@ -19,11 +21,14 @@ module.exports = async (req, res) => {
     const zipRes = await gh(`/repos/${run.repository.owner.login}/${run.repository.name}/actions/artifacts/${artifact.id}/zip`);
     const zipBuf = Buffer.from(await zipRes.arrayBuffer());
     const zip = new AdmZip(zipBuf);
-    const csvEntry = zip.getEntries().find((e) => e.entryName.endsWith('.csv'));
-    if (!csvEntry) return res.status(500).json({ error: 'artifact did not contain a csv' });
+    const csvEntry = zip.getEntries().find((e) => e.entryName === entryName);
+    if (!csvEntry) return res.status(404).json({ error: `artifact did not contain ${entryName}` });
+
+    const address = addressFromRun(run) || jobId;
+    const filename = variant === 'unaggregated' ? `${address}_sora_import_unaggregated.csv` : `${address}_sora_import.csv`;
 
     res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="${jobId}_sora_import.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.status(200).send(csvEntry.getData());
   } catch (e) {
     res.status(502).json({ error: `could not fetch export: ${e.message}` });
